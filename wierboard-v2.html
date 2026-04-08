@@ -1,0 +1,1346 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WierBoard — Soundboard</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Outfit:wght@300;400;500;600;700;800&display=swap');
+
+:root {
+  --bg: #1a1a22;
+  --surface: #23232f;
+  --surface2: #2c2c3a;
+  --surface3: #35354a;
+  --border: #3a3a50;
+  --text: #e8e8f0;
+  --text-dim: #8888aa;
+  --text-faint: #55557a;
+  --accent: #39966a;
+  --accent-bright: #4dbb85;
+  --accent-dim: #2a7050;
+  --kill-red: #dc5b5b;
+  --kill-red-dim: #a04040;
+  --playing: #4dbb85;
+  --loaded: #39966a;
+  --empty: #2a2a38;
+  --key-gap: 3px;
+  --key-radius: 5px;
+  --toolbar-h: 48px;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Outfit', sans-serif;
+  height: 100vh;
+  overflow: hidden;
+  user-select: none;
+}
+
+/* ─── TOOLBAR ─── */
+#toolbar {
+  height: var(--toolbar-h);
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+  gap: 12px;
+  z-index: 100;
+}
+
+#toolbar .brand {
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 700;
+  font-size: 15px;
+  letter-spacing: 2px;
+  color: var(--accent-bright);
+  text-transform: uppercase;
+  margin-right: 8px;
+}
+
+#toolbar .brand span {
+  color: var(--text-dim);
+  font-weight: 400;
+}
+
+.toolbar-btn {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  padding: 6px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.toolbar-btn:hover { background: var(--surface3); color: var(--text); border-color: var(--accent-dim); }
+.toolbar-btn.active { background: var(--accent-dim); color: var(--text); border-color: var(--accent); }
+.toolbar-btn.danger { color: var(--kill-red); }
+.toolbar-btn.danger:hover { background: var(--kill-red-dim); color: #fff; }
+
+.toolbar-sep {
+  width: 1px;
+  height: 24px;
+  background: var(--border);
+}
+
+#masterVolume {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+}
+
+#masterVolume label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+#masterVolumeSlider {
+  -webkit-appearance: none;
+  width: 100px;
+  height: 4px;
+  background: var(--surface3);
+  border-radius: 2px;
+  outline: none;
+}
+#masterVolumeSlider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 14px; height: 14px;
+  background: var(--accent-bright);
+  border-radius: 50%;
+  cursor: pointer;
+  box-shadow: 0 0 6px var(--accent-dim);
+}
+
+#masterVolVal {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  color: var(--accent-bright);
+  min-width: 32px;
+  text-align: right;
+}
+
+/* ─── SYNC STATUS ─── */
+#syncStatus {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  padding: 4px 10px;
+  border-radius: 4px;
+  transition: all 0.3s;
+  white-space: nowrap;
+}
+#syncStatus.saved {
+  color: var(--accent-bright);
+  background: rgba(57,150,106,0.1);
+  border: 1px solid rgba(57,150,106,0.2);
+}
+#syncStatus.saving {
+  color: #e0c040;
+  background: rgba(224,192,64,0.1);
+  border: 1px solid rgba(224,192,64,0.2);
+}
+#syncStatus.error {
+  color: var(--kill-red);
+  background: rgba(220,91,91,0.1);
+  border: 1px solid rgba(220,91,91,0.2);
+}
+#syncStatus.loading {
+  color: var(--text-dim);
+  background: rgba(136,136,170,0.1);
+  border: 1px solid rgba(136,136,170,0.2);
+}
+
+/* ─── MAIN LAYOUT ─── */
+#main {
+  display: flex;
+  height: calc(100vh - var(--toolbar-h));
+}
+
+/* ─── KEYBOARD ─── */
+#keyboardPanel {
+  flex: 1;
+  padding: 12px;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.keyboard-row {
+  display: flex;
+  gap: var(--key-gap);
+  justify-content: center;
+}
+
+.key {
+  position: relative;
+  min-width: 52px;
+  height: 52px;
+  background: var(--empty);
+  border: 1px solid var(--border);
+  border-radius: var(--key-radius);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.1s;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.key .key-label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-dim);
+  z-index: 2;
+  pointer-events: none;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.key .sound-name {
+  font-size: 7px;
+  color: var(--text-faint);
+  max-width: 48px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  z-index: 2;
+  pointer-events: none;
+  margin-top: 1px;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.key.loaded {
+  background: var(--surface2);
+  border-color: var(--accent-dim);
+}
+
+.key.loaded .key-label {
+  color: var(--accent-bright);
+}
+
+.key.playing {
+  background: var(--accent-dim) !important;
+  border-color: var(--accent-bright) !important;
+  box-shadow: 0 0 12px var(--accent-dim), inset 0 0 8px rgba(77,187,133,0.15);
+}
+
+.key.playing .key-label {
+  color: #fff !important;
+}
+
+.key .progress-bar {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  height: 3px;
+  background: var(--accent-bright);
+  z-index: 3;
+  transition: width 0.05s linear;
+}
+
+.key:hover {
+  border-color: var(--accent);
+  background: var(--surface3);
+}
+
+.key.selected {
+  outline: 2px solid var(--accent-bright);
+  outline-offset: -2px;
+}
+
+.key.kill {
+  background: var(--kill-red-dim);
+  border-color: var(--kill-red);
+}
+.key.kill .key-label { color: var(--kill-red); font-weight: 700; }
+.key.kill:hover { background: var(--kill-red); }
+.key.kill:hover .key-label { color: #fff; }
+
+.key.spacer {
+  visibility: hidden;
+  min-width: 26px;
+  pointer-events: none;
+}
+
+.key.wide { min-width: 72px; }
+.key.wider { min-width: 90px; }
+.key.widest { min-width: 110px; }
+.key.space-bar { min-width: 280px; }
+.key.unused {
+  background: var(--bg);
+  border-color: transparent;
+  cursor: default;
+  opacity: 0.3;
+}
+
+.key.drag-hover {
+  box-shadow: 0 0 0 4px var(--accent-bright), 0 0 16px 2px var(--accent-bright);
+  z-index: 10;
+}
+.key.drop-animate {
+  animation: dropFlash 0.35s cubic-bezier(.4,2,.6,1) 1;
+}
+@keyframes dropFlash {
+  0% { background: var(--accent-bright); border-color: var(--accent-bright); }
+  80% { background: var(--accent-bright); border-color: var(--accent-bright); }
+  100% { background: var(--surface2); border-color: var(--accent-dim); }
+}
+
+/* ─── CONFIG PANEL ─── */
+#configPanel {
+  width: 300px;
+  background: var(--surface);
+  border-left: 1px solid var(--border);
+  padding: 16px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+#configPanel h3 {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  color: var(--text-dim);
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 8px;
+}
+
+.config-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.config-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.config-row label {
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.config-row select, .config-row input[type="number"] {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  outline: none;
+  width: 120px;
+}
+
+.config-row input[type="range"] {
+  -webkit-appearance: none;
+  width: 120px;
+  height: 4px;
+  background: var(--surface3);
+  border-radius: 2px;
+}
+.config-row input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 12px; height: 12px;
+  background: var(--accent-bright);
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+#waveformCanvas {
+  width: 100%;
+  height: 80px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+
+.config-key-id {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--accent-bright);
+  text-align: center;
+}
+
+.config-sound-name {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  color: var(--text-dim);
+  text-align: center;
+  word-break: break-all;
+}
+
+.config-btn {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  padding: 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  text-align: center;
+  transition: all 0.15s;
+}
+.config-btn:hover { background: var(--accent-dim); border-color: var(--accent); }
+.config-btn.remove { color: var(--kill-red); }
+.config-btn.remove:hover { background: var(--kill-red-dim); }
+
+#noSelection {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: var(--text-faint);
+  font-size: 13px;
+  text-align: center;
+  gap: 8px;
+}
+
+#noSelection .hint {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  color: var(--text-faint);
+  line-height: 1.6;
+}
+
+/* ─── GLOBAL DROP OVERLAY ─── */
+#dropOverlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(57, 150, 106, 0.12);
+  border: 3px dashed var(--accent-bright);
+  z-index: 999;
+  align-items: center;
+  justify-content: center;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 18px;
+  color: var(--accent-bright);
+  letter-spacing: 2px;
+}
+
+/* ─── SCROLLBAR ─── */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: var(--bg); }
+::-webkit-scrollbar-thumb { background: var(--surface3); border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<div id="dropOverlay">DROP AUDIO FILES</div>
+
+<div id="toolbar">
+  <div class="brand">WierBoard <span>v2</span></div>
+  <div class="toolbar-sep"></div>
+  <button class="toolbar-btn" id="btnLoadFiles" title="Load audio files">⊕ Load</button>
+  <button class="toolbar-btn" id="btnSaveKeymap" title="Export keymap as JSON file">⤓ Export</button>
+  <button class="toolbar-btn" id="btnLoadKeymap" title="Import keymap from JSON file">⤒ Import</button>
+  <div class="toolbar-sep"></div>
+  <button class="toolbar-btn danger" id="btnKillAll" title="Stop all sounds">■ Kill All</button>
+  <button class="toolbar-btn danger" id="btnClearAll" title="Clear all keys">✕ Clear</button>
+  <div id="masterVolume">
+    <label>Master</label>
+    <input type="range" id="masterVolumeSlider" min="0" max="100" value="100">
+    <span id="masterVolVal">100</span>
+  </div>
+  <div id="syncStatus" class="loading">loading...</div>
+</div>
+
+<div id="main">
+  <div id="keyboardPanel"></div>
+  <div id="configPanel">
+    <div id="noSelection">
+      <div style="font-size: 28px; opacity: 0.3;">⌨</div>
+      <div>Click a key to configure</div>
+      <div class="hint">
+        Drag & drop audio files onto keys<br>
+        Or click a key then use Load<br>
+        Press key to trigger sound<br><br>
+        ✓ Auto-saves — no login needed<br>
+        ✓ Sounds persist across sessions
+      </div>
+    </div>
+    <div id="configContent" style="display:none">
+      <div class="config-key-id" id="cfgKeyId"></div>
+      <div class="config-sound-name" id="cfgSoundName">No sound loaded</div>
+      <canvas id="waveformCanvas" height="80"></canvas>
+      <div class="config-section">
+        <h3>Sound Controls</h3>
+        <div class="config-row">
+          <label>Volume</label>
+          <input type="range" id="cfgVolume" min="0" max="150" value="100">
+        </div>
+        <div class="config-row">
+          <label>Playback Rate</label>
+          <input type="range" id="cfgRate" min="25" max="400" value="100">
+        </div>
+        <div class="config-row">
+          <label>Trigger Mode</label>
+          <select id="cfgMode">
+            <option value="oneshot">One Shot</option>
+            <option value="toggle">Toggle On/Off</option>
+            <option value="hold">Hold to Play</option>
+            <option value="loop">Loop</option>
+            <option value="restart">Restart</option>
+            <option value="pause">Pause/Resume</option>
+          </select>
+        </div>
+        <div class="config-row">
+          <small style="color:var(--text-faint);font-family:'JetBrains Mono',monospace;line-height:1.5;">
+            <b>One Shot:</b> Play once per press.<br>
+            <b>Toggle:</b> Press play, press stop.<br>
+            <b>Hold:</b> Plays while holding key.<br>
+            <b>Loop:</b> Repeat until stopped.<br>
+            <b>Restart:</b> Retrigger from start.<br>
+            <b>Pause:</b> Pause & resume position.
+          </small>
+        </div>
+        <div class="config-row">
+          <label>Fade In (ms)</label>
+          <input type="number" id="cfgFadeIn" min="0" max="5000" value="0" step="50">
+        </div>
+        <div class="config-row">
+          <label>Fade Out (ms)</label>
+          <input type="number" id="cfgFadeOut" min="0" max="5000" value="0" step="50">
+        </div>
+      </div>
+      <div class="config-section">
+        <h3>Key Color</h3>
+        <div class="config-row">
+          <label>Loaded Color</label>
+          <input type="color" id="cfgColor" value="#39966a" style="width:40px;height:28px;border:none;background:none;cursor:pointer;">
+        </div>
+      </div>
+      <button class="config-btn" id="cfgLoadSound">Load Sound File</button>
+      <button class="config-btn remove" id="cfgRemoveSound">Remove Sound</button>
+    </div>
+  </div>
+</div>
+
+<input type="file" id="fileInput" accept="audio/*" multiple style="display:none">
+<input type="file" id="keymapInput" accept=".json" style="display:none">
+<input type="file" id="singleFileInput" accept="audio/*" style="display:none">
+
+<script>
+// ═══════════════════════════════════════════════════════════════
+// INDEXEDDB AUTO-SYNC — No login, no cloud, instant persistence
+// ═══════════════════════════════════════════════════════════════
+
+const DB_NAME = 'WierBoardDB';
+const DB_VERSION = 1;
+const STORE_SOUNDS = 'sounds';     // stores raw audio blobs per key
+const STORE_SETTINGS = 'settings'; // stores per-key settings
+let db = null;
+let saveTimeout = null;
+let isLoading = false;
+
+function openDB() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(DB_NAME, DB_VERSION);
+    req.onupgradeneeded = (e) => {
+      const db = e.target.result;
+      if (!db.objectStoreNames.contains(STORE_SOUNDS)) {
+        db.createObjectStore(STORE_SOUNDS); // keyed by keyCode
+      }
+      if (!db.objectStoreNames.contains(STORE_SETTINGS)) {
+        db.createObjectStore(STORE_SETTINGS); // keyed by keyCode
+      }
+    };
+    req.onsuccess = (e) => resolve(e.target.result);
+    req.onerror = (e) => reject(e.target.error);
+  });
+}
+
+function setSyncStatus(state, text) {
+  const el = document.getElementById('syncStatus');
+  el.className = state;
+  el.textContent = text || state;
+}
+
+// Save a single key to IndexedDB
+async function saveKeyToDB(code) {
+  if (isLoading || !db) return;
+  setSyncStatus('saving', 'saving...');
+  try {
+    const k = getKey(code);
+    const tx = db.transaction([STORE_SOUNDS, STORE_SETTINGS], 'readwrite');
+    
+    if (k.audioBuffer && k.rawFile) {
+      // Store the raw audio bytes
+      tx.objectStore(STORE_SOUNDS).put(k.rawFile, code);
+      tx.objectStore(STORE_SETTINGS).put(k.settings, code);
+    } else {
+      // Key was cleared — remove from DB
+      tx.objectStore(STORE_SOUNDS).delete(code);
+      tx.objectStore(STORE_SETTINGS).delete(code);
+    }
+
+    await new Promise((res, rej) => {
+      tx.oncomplete = res;
+      tx.onerror = () => rej(tx.error);
+    });
+    setSyncStatus('saved', '✓ saved');
+  } catch (err) {
+    console.error('Save error:', err);
+    setSyncStatus('error', '✕ save failed');
+  }
+}
+
+// Debounced save — batches rapid changes
+function scheduleSave(code) {
+  if (saveTimeout) clearTimeout(saveTimeout);
+  saveTimeout = setTimeout(() => saveKeyToDB(code), 300);
+}
+
+// Load all keys from IndexedDB on startup
+async function loadAllFromDB() {
+  if (!db) return;
+  isLoading = true;
+  setSyncStatus('loading', 'loading...');
+  
+  try {
+    const tx = db.transaction([STORE_SOUNDS, STORE_SETTINGS], 'readonly');
+    const soundStore = tx.objectStore(STORE_SOUNDS);
+    const settingsStore = tx.objectStore(STORE_SETTINGS);
+
+    // Get all keys from settings store
+    const allSettingsKeys = await new Promise((res, rej) => {
+      const req = settingsStore.getAllKeys();
+      req.onsuccess = () => res(req.result);
+      req.onerror = () => rej(req.error);
+    });
+
+    let loadCount = 0;
+    for (const code of allSettingsKeys) {
+      try {
+        const [rawFile, settings] = await Promise.all([
+          new Promise((res, rej) => {
+            const r = soundStore.get(code);
+            r.onsuccess = () => res(r.result);
+            r.onerror = () => rej(r.error);
+          }),
+          new Promise((res, rej) => {
+            const r = settingsStore.get(code);
+            r.onsuccess = () => res(r.result);
+            r.onerror = () => rej(r.error);
+          })
+        ]);
+
+        if (rawFile && settings) {
+          const audioBuffer = await audioCtx.decodeAudioData(rawFile.slice(0));
+          const k = getKey(code);
+          k.audioBuffer = audioBuffer;
+          k.rawFile = rawFile;
+          k.settings = { ...defaultSettings(), ...settings };
+
+          const el = document.querySelector(`.key[data-code="${code}"]`);
+          if (el) {
+            el.classList.add('loaded');
+            el.querySelector('.sound-name').textContent = 
+              k.settings.soundName.replace(/\.[^.]+$/, '').substring(0, 12);
+            if (k.settings.color && k.settings.color !== '#39966a') {
+              el.style.borderColor = k.settings.color;
+            }
+          }
+          loadCount++;
+        }
+      } catch (err) {
+        console.warn(`Failed to load key ${code}:`, err);
+      }
+    }
+    
+    setSyncStatus('saved', loadCount > 0 ? `✓ ${loadCount} sounds loaded` : '✓ ready');
+    
+    // Clear the "loaded" message after a few seconds
+    setTimeout(() => {
+      const el = document.getElementById('syncStatus');
+      if (el.textContent.includes('loaded')) setSyncStatus('saved', '✓ saved');
+    }, 3000);
+    
+  } catch (err) {
+    console.error('Load error:', err);
+    setSyncStatus('error', '✕ load failed');
+  }
+  isLoading = false;
+}
+
+// Clear all from DB
+async function clearAllFromDB() {
+  if (!db) return;
+  const tx = db.transaction([STORE_SOUNDS, STORE_SETTINGS], 'readwrite');
+  tx.objectStore(STORE_SOUNDS).clear();
+  tx.objectStore(STORE_SETTINGS).clear();
+  await new Promise((res) => { tx.oncomplete = res; });
+  setSyncStatus('saved', '✓ cleared');
+}
+
+
+// ═══════════════════════════════════════════════════════════════
+// AUDIO ENGINE
+// ═══════════════════════════════════════════════════════════════
+
+const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+const masterGain = audioCtx.createGain();
+masterGain.connect(audioCtx.destination);
+
+// ─── KEY LAYOUT ───
+const ROWS = [
+  [
+    {id:'Escape',label:'ESC',kill:true},{id:'_sp1',spacer:true},
+    {id:'F1',label:'F1'},{id:'F2',label:'F2'},{id:'F3',label:'F3'},{id:'F4',label:'F4'},
+    {id:'_sp2',spacer:true},
+    {id:'F5',label:'F5'},{id:'F6',label:'F6'},{id:'F7',label:'F7'},{id:'F8',label:'F8'},
+    {id:'_sp3',spacer:true},
+    {id:'F9',label:'F9'},{id:'F10',label:'F10'},{id:'F11',label:'F11'},{id:'F12',label:'F12'}
+  ],
+  [
+    {id:'Backquote',label:'`'},{id:'Digit1',label:'1'},{id:'Digit2',label:'2'},{id:'Digit3',label:'3'},
+    {id:'Digit4',label:'4'},{id:'Digit5',label:'5'},{id:'Digit6',label:'6'},{id:'Digit7',label:'7'},
+    {id:'Digit8',label:'8'},{id:'Digit9',label:'9'},{id:'Digit0',label:'0'},
+    {id:'Minus',label:'-'},{id:'Equal',label:'='},
+    {id:'Backspace',label:'⌫',kill:true,cls:'wide'}
+  ],
+  [
+    {id:'Tab',label:'TAB',cls:'wide'},
+    {id:'KeyQ',label:'Q'},{id:'KeyW',label:'W'},{id:'KeyE',label:'E'},{id:'KeyR',label:'R'},
+    {id:'KeyT',label:'T'},{id:'KeyY',label:'Y'},{id:'KeyU',label:'U'},{id:'KeyI',label:'I'},
+    {id:'KeyO',label:'O'},{id:'KeyP',label:'P'},
+    {id:'BracketLeft',label:'['},{id:'BracketRight',label:']'},{id:'Backslash',label:'\\'}
+  ],
+  [
+    {id:'CapsLock',label:'CAPS',unused:true,cls:'wider'},
+    {id:'KeyA',label:'A'},{id:'KeyS',label:'S'},{id:'KeyD',label:'D'},{id:'KeyF',label:'F'},
+    {id:'KeyG',label:'G'},{id:'KeyH',label:'H'},{id:'KeyJ',label:'J'},{id:'KeyK',label:'K'},
+    {id:'KeyL',label:'L'},{id:'Semicolon',label:';'},{id:'Quote',label:"'"},
+    {id:'Enter',label:'ENTER',cls:'wider'}
+  ],
+  [
+    {id:'ShiftLeft',label:'SHIFT',unused:true,cls:'widest'},
+    {id:'KeyZ',label:'Z'},{id:'KeyX',label:'X'},{id:'KeyC',label:'C'},{id:'KeyV',label:'V'},
+    {id:'KeyB',label:'B'},{id:'KeyN',label:'N'},{id:'KeyM',label:'M'},
+    {id:'Comma',label:','},{id:'Period',label:'.'},{id:'Slash',label:'/'},
+    {id:'ShiftRight',label:'SHIFT',unused:true,cls:'widest'}
+  ],
+  [
+    {id:'ControlLeft',label:'CTRL',unused:true,cls:'wide'},
+    {id:'MetaLeft',label:'⌘',unused:true},
+    {id:'AltLeft',label:'ALT',unused:true},
+    {id:'Space',label:'SPACE',cls:'space-bar'},
+    {id:'AltRight',label:'ALT',unused:true},
+    {id:'MetaRight',label:'⌘',unused:true},
+    {id:'ControlRight',label:'CTRL',unused:true,cls:'wide'}
+  ]
+];
+
+// ─── STATE ───
+const keys = {};
+let selectedKey = null;
+
+function defaultSettings() {
+  return {
+    volume: 100,
+    rate: 100,
+    mode: 'oneshot',
+    fadeIn: 0,
+    fadeOut: 0,
+    color: '#39966a',
+    soundName: ''
+  };
+}
+
+function getKey(code) {
+  if (!keys[code]) keys[code] = {
+    buffer: null, audioBuffer: null, settings: defaultSettings(),
+    source: null, gainNode: null, playing: false, rawFile: null,
+    paused: false, pauseTime: 0, pauseOffset: 0, pauseByUser: false,
+    startTime: 0
+  };
+  return keys[code];
+}
+
+// ─── BUILD KEYBOARD ───
+const kbPanel = document.getElementById('keyboardPanel');
+
+ROWS.forEach(row => {
+  const rowEl = document.createElement('div');
+  rowEl.className = 'keyboard-row';
+  row.forEach(k => {
+    const el = document.createElement('div');
+    el.className = 'key';
+    if (k.spacer) { el.classList.add('spacer'); rowEl.appendChild(el); return; }
+    if (k.cls) el.classList.add(k.cls);
+    if (k.kill) el.classList.add('kill');
+    if (k.unused) el.classList.add('unused');
+    el.dataset.code = k.id;
+
+    const lbl = document.createElement('div');
+    lbl.className = 'key-label';
+    lbl.textContent = k.label;
+    el.appendChild(lbl);
+
+    const snd = document.createElement('div');
+    snd.className = 'sound-name';
+    el.appendChild(snd);
+
+    const prog = document.createElement('div');
+    prog.className = 'progress-bar';
+    el.appendChild(prog);
+
+    el.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (k.unused) return;
+      selectKey(k.id);
+    });
+
+    el.addEventListener('dragover', (e) => {
+      e.preventDefault(); e.stopPropagation();
+      el.classList.add('drag-hover');
+    });
+    el.addEventListener('dragleave', (e) => {
+      e.preventDefault(); e.stopPropagation();
+      el.classList.remove('drag-hover');
+    });
+    el.addEventListener('drop', (e) => {
+      e.preventDefault(); e.stopPropagation();
+      el.classList.remove('drag-hover');
+      const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('audio'));
+      if (files.length > 0) {
+        (async () => {
+          for (const file of files) {
+            await loadSoundToKey(k.id, file);
+            el.classList.add('drop-animate');
+            setTimeout(() => el.classList.remove('drop-animate'), 350);
+          }
+        })();
+      }
+    });
+
+    rowEl.appendChild(el);
+  });
+  kbPanel.appendChild(rowEl);
+});
+
+// ─── KEY SELECTION ───
+function selectKey(code) {
+  document.querySelectorAll('.key.selected').forEach(el => el.classList.remove('selected'));
+  selectedKey = code;
+  const el = document.querySelector(`.key[data-code="${code}"]`);
+  if (el) el.classList.add('selected');
+  updateConfigPanel();
+}
+
+function updateConfigPanel() {
+  const noSel = document.getElementById('noSelection');
+  const content = document.getElementById('configContent');
+  if (!selectedKey) { noSel.style.display = ''; content.style.display = 'none'; return; }
+  noSel.style.display = 'none';
+  content.style.display = '';
+
+  const k = getKey(selectedKey);
+  const keyDef = ROWS.flat().find(r => r.id === selectedKey);
+  document.getElementById('cfgKeyId').textContent = keyDef ? keyDef.label : selectedKey;
+  document.getElementById('cfgSoundName').textContent = k.settings.soundName || 'No sound loaded';
+  document.getElementById('cfgVolume').value = k.settings.volume;
+  document.getElementById('cfgRate').value = k.settings.rate;
+  document.getElementById('cfgMode').value = k.settings.mode;
+  document.getElementById('cfgFadeIn').value = k.settings.fadeIn;
+  document.getElementById('cfgFadeOut').value = k.settings.fadeOut;
+  document.getElementById('cfgColor').value = k.settings.color;
+  drawWaveform(k.audioBuffer);
+}
+
+// ─── WAVEFORM ───
+function drawWaveform(audioBuffer) {
+  const canvas = document.getElementById('waveformCanvas');
+  const ctx = canvas.getContext('2d');
+  canvas.width = canvas.offsetWidth * 2;
+  canvas.height = 160;
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  if (!audioBuffer) {
+    ctx.fillStyle = '#55557a';
+    ctx.font = '12px JetBrains Mono';
+    ctx.textAlign = 'center';
+    ctx.fillText('No waveform', canvas.width / 2, canvas.height / 2 + 4);
+    return;
+  }
+
+  const data = audioBuffer.getChannelData(0);
+  const step = Math.ceil(data.length / canvas.width);
+  const amp = canvas.height / 2;
+
+  ctx.fillStyle = 'rgba(57,150,106,0.15)';
+  ctx.strokeStyle = '#4dbb85';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  for (let i = 0; i < canvas.width; i++) {
+    let min = 1.0, max = -1.0;
+    for (let j = 0; j < step; j++) {
+      const datum = data[(i * step) + j] || 0;
+      if (datum < min) min = datum;
+      if (datum > max) max = datum;
+    }
+    const yLow = (1 + min) * amp;
+    const yHigh = (1 + max) * amp;
+    ctx.fillRect(i, yHigh, 1, yLow - yHigh);
+    if (i === 0) ctx.moveTo(i, amp + max * amp * 0.8);
+    else ctx.lineTo(i, amp + max * amp * 0.8);
+  }
+  ctx.stroke();
+}
+
+// ─── LOAD SOUND (+ auto-save) ───
+async function loadSoundToKey(code, file) {
+  const k = getKey(code);
+  const arrayBuffer = await file.arrayBuffer();
+  const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer.slice(0));
+  k.audioBuffer = audioBuffer;
+  k.rawFile = arrayBuffer;
+  k.settings.soundName = file.name;
+
+  const el = document.querySelector(`.key[data-code="${code}"]`);
+  if (el) {
+    el.classList.add('loaded');
+    el.querySelector('.sound-name').textContent = file.name.replace(/\.[^.]+$/, '').substring(0, 12);
+  }
+
+  if (selectedKey === code) updateConfigPanel();
+  
+  // ★ AUTO-SAVE
+  scheduleSave(code);
+}
+
+// ─── PLAY / STOP ───
+function playKey(code) {
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+  const k = getKey(code);
+  if (!k.audioBuffer) return;
+
+  const settings = k.settings;
+
+  if (settings.mode === 'pause') {
+    if (k.playing && !k.paused) {
+      k.paused = true;
+      k.pauseTime = audioCtx.currentTime - (k.startTime || 0) + (k.pauseOffset || 0);
+      k.pauseByUser = true;
+      stopKeyImmediate(code);
+      return;
+    } else if (k.paused) {
+      k.paused = false;
+      k.pauseByUser = false;
+      startAudioFromOffset(code, k.pauseTime || 0);
+      return;
+    }
+  }
+
+  if (settings.mode === 'toggle' && k.playing) { stopKey(code); return; }
+  if (settings.mode === 'restart' && k.playing) { stopKeyImmediate(code); }
+  if (settings.mode !== 'restart' && settings.mode !== 'loop' && k.playing && settings.mode === 'oneshot') return;
+
+  startAudioFromOffset(code, 0);
+}
+
+function startAudioFromOffset(code, offset) {
+  const k = getKey(code);
+  const settings = k.settings;
+  const source = audioCtx.createBufferSource();
+  source.buffer = k.audioBuffer;
+  source.playbackRate.value = settings.rate / 100;
+  source.loop = settings.mode === 'loop';
+
+  const gainNode = audioCtx.createGain();
+  gainNode.gain.value = settings.volume / 100;
+
+  if (settings.fadeIn > 0) {
+    gainNode.gain.setValueAtTime(0, audioCtx.currentTime);
+    gainNode.gain.linearRampToValueAtTime(settings.volume / 100, audioCtx.currentTime + settings.fadeIn / 1000);
+  }
+
+  source.connect(gainNode);
+  gainNode.connect(masterGain);
+
+  source.onended = () => {
+    if (!k.pauseByUser) {
+      k.playing = false;
+      k.source = null;
+      k.gainNode = null;
+      k.paused = false;
+      k.pauseTime = 0;
+      k.pauseOffset = 0;
+      const el = document.querySelector(`.key[data-code="${code}"]`);
+      if (el) { el.classList.remove('playing'); el.querySelector('.progress-bar').style.width = '0'; }
+    }
+    k.pauseByUser = false;
+  };
+
+  source.start(0, offset);
+  k.source = source;
+  k.gainNode = gainNode;
+  k.playing = true;
+  k.startTime = audioCtx.currentTime;
+  k.pauseOffset = offset;
+
+  const el = document.querySelector(`.key[data-code="${code}"]`);
+  if (el) el.classList.add('playing');
+
+  if (!source.loop) animateProgress(code);
+}
+
+function animateProgress(code) {
+  const k = getKey(code);
+  if (!k.playing || !k.audioBuffer) return;
+  const el = document.querySelector(`.key[data-code="${code}"] .progress-bar`);
+  if (!el) return;
+
+  const duration = k.audioBuffer.duration / (k.settings.rate / 100);
+  const elapsed = audioCtx.currentTime - k.startTime + (k.pauseOffset || 0);
+  const pct = Math.min(100, (elapsed / k.audioBuffer.duration) * 100);
+  el.style.width = pct + '%';
+
+  if (pct < 100 && k.playing) requestAnimationFrame(() => animateProgress(code));
+}
+
+function stopKey(code) {
+  const k = getKey(code);
+  if (!k.playing || !k.source) return;
+
+  if (k.settings.fadeOut > 0) {
+    k.gainNode.gain.linearRampToValueAtTime(0, audioCtx.currentTime + k.settings.fadeOut / 1000);
+    k.source.stop(audioCtx.currentTime + k.settings.fadeOut / 1000);
+  } else {
+    k.source.stop();
+  }
+  k.playing = false;
+  k.source = null;
+  k.gainNode = null;
+  const el = document.querySelector(`.key[data-code="${code}"]`);
+  if (el) { el.classList.remove('playing'); el.querySelector('.progress-bar').style.width = '0'; }
+}
+
+function stopKeyImmediate(code) {
+  const k = getKey(code);
+  if (!k.source) return;
+  try { k.source.stop(); } catch(e) {}
+  k.playing = false;
+  k.source = null;
+  k.gainNode = null;
+  const el = document.querySelector(`.key[data-code="${code}"]`);
+  if (el) { el.classList.remove('playing'); el.querySelector('.progress-bar').style.width = '0'; }
+}
+
+function killAll() {
+  Object.keys(keys).forEach(code => stopKeyImmediate(code));
+}
+
+// ─── KEYBOARD INPUT ───
+const heldKeys = new Set();
+
+document.addEventListener('keydown', (e) => {
+  if (e.repeat) return;
+  const code = e.code;
+
+  if (code === 'Escape' || code === 'Backspace') {
+    e.preventDefault();
+    killAll();
+    return;
+  }
+
+  const keyDef = ROWS.flat().find(r => r.id === code);
+  if (!keyDef || keyDef.unused) return;
+
+  e.preventDefault();
+  heldKeys.add(code);
+  selectKey(code);
+  playKey(code);
+
+  const el = document.querySelector(`.key[data-code="${code}"]`);
+  if (el && !el.classList.contains('kill')) el.style.transform = 'scale(0.95)';
+});
+
+document.addEventListener('keyup', (e) => {
+  const code = e.code;
+  heldKeys.delete(code);
+
+  const k = getKey(code);
+  if (k && k.settings.mode === 'hold' && k.playing) {
+    stopKey(code);
+  }
+
+  const el = document.querySelector(`.key[data-code="${code}"]`);
+  if (el) el.style.transform = '';
+});
+
+// ─── CONFIG PANEL EVENTS (all auto-save) ───
+document.getElementById('cfgVolume').addEventListener('input', (e) => {
+  if (!selectedKey) return;
+  getKey(selectedKey).settings.volume = parseInt(e.target.value);
+  if (getKey(selectedKey).gainNode) getKey(selectedKey).gainNode.gain.value = e.target.value / 100;
+  scheduleSave(selectedKey);
+});
+
+document.getElementById('cfgRate').addEventListener('input', (e) => {
+  if (!selectedKey) return;
+  getKey(selectedKey).settings.rate = parseInt(e.target.value);
+  if (getKey(selectedKey).source) getKey(selectedKey).source.playbackRate.value = e.target.value / 100;
+  scheduleSave(selectedKey);
+});
+
+document.getElementById('cfgMode').addEventListener('change', (e) => {
+  if (!selectedKey) return;
+  getKey(selectedKey).settings.mode = e.target.value;
+  scheduleSave(selectedKey);
+});
+
+document.getElementById('cfgFadeIn').addEventListener('change', (e) => {
+  if (!selectedKey) return;
+  getKey(selectedKey).settings.fadeIn = parseInt(e.target.value) || 0;
+  scheduleSave(selectedKey);
+});
+
+document.getElementById('cfgFadeOut').addEventListener('change', (e) => {
+  if (!selectedKey) return;
+  getKey(selectedKey).settings.fadeOut = parseInt(e.target.value) || 0;
+  scheduleSave(selectedKey);
+});
+
+document.getElementById('cfgColor').addEventListener('input', (e) => {
+  if (!selectedKey) return;
+  getKey(selectedKey).settings.color = e.target.value;
+  const el = document.querySelector(`.key[data-code="${selectedKey}"]`);
+  if (el && getKey(selectedKey).audioBuffer) {
+    el.style.borderColor = e.target.value;
+  }
+  scheduleSave(selectedKey);
+});
+
+document.getElementById('cfgRemoveSound').addEventListener('click', () => {
+  if (!selectedKey) return;
+  const code = selectedKey;
+  const k = getKey(code);
+  stopKeyImmediate(code);
+  k.audioBuffer = null;
+  k.rawFile = null;
+  k.settings.soundName = '';
+  const el = document.querySelector(`.key[data-code="${code}"]`);
+  if (el) { el.classList.remove('loaded','playing'); el.querySelector('.sound-name').textContent = ''; el.style.borderColor = ''; }
+  updateConfigPanel();
+  saveKeyToDB(code); // save removal immediately
+});
+
+document.getElementById('cfgLoadSound').addEventListener('click', () => {
+  if (!selectedKey) return;
+  const inp = document.getElementById('singleFileInput');
+  inp.onchange = (e) => {
+    if (e.target.files[0]) loadSoundToKey(selectedKey, e.target.files[0]);
+    inp.value = '';
+  };
+  inp.click();
+});
+
+// ─── TOOLBAR EVENTS ───
+document.getElementById('masterVolumeSlider').addEventListener('input', (e) => {
+  masterGain.gain.value = e.target.value / 100;
+  document.getElementById('masterVolVal').textContent = e.target.value;
+});
+
+document.getElementById('btnKillAll').addEventListener('click', killAll);
+
+document.getElementById('btnClearAll').addEventListener('click', async () => {
+  if (!confirm('Clear all loaded sounds? This also clears saved data.')) return;
+  killAll();
+  Object.keys(keys).forEach(code => {
+    keys[code].audioBuffer = null;
+    keys[code].rawFile = null;
+    keys[code].settings.soundName = '';
+    const el = document.querySelector(`.key[data-code="${code}"]`);
+    if (el) { el.classList.remove('loaded','playing'); el.querySelector('.sound-name').textContent = ''; el.style.borderColor = ''; }
+  });
+  await clearAllFromDB();
+  updateConfigPanel();
+});
+
+document.getElementById('btnLoadFiles').addEventListener('click', () => {
+  document.getElementById('fileInput').click();
+});
+
+document.getElementById('fileInput').addEventListener('change', async (e) => {
+  const files = Array.from(e.target.files);
+  const assignOrder = ['KeyQ','KeyW','KeyE','KeyR','KeyT','KeyY','KeyU','KeyI','KeyO','KeyP',
+    'KeyA','KeyS','KeyD','KeyF','KeyG','KeyH','KeyJ','KeyK','KeyL',
+    'KeyZ','KeyX','KeyC','KeyV','KeyB','KeyN','KeyM',
+    'Digit1','Digit2','Digit3','Digit4','Digit5','Digit6','Digit7','Digit8','Digit9','Digit0',
+    'F1','F2','F3','F4','F5','F6','F7','F8','F9','F10','F11','F12'];
+  let idx = 0;
+  for (const file of files) {
+    while (idx < assignOrder.length && getKey(assignOrder[idx]).audioBuffer) idx++;
+    if (idx >= assignOrder.length) break;
+    await loadSoundToKey(assignOrder[idx], file);
+    idx++;
+  }
+  e.target.value = '';
+});
+
+// ─── EXPORT / IMPORT KEYMAP (file-based, for sharing between machines) ───
+document.getElementById('btnSaveKeymap').addEventListener('click', async () => {
+  const data = {};
+  for (const [code, k] of Object.entries(keys)) {
+    if (k.audioBuffer && k.rawFile) {
+      // Convert ArrayBuffer to base64 in chunks to avoid stack overflow
+      const bytes = new Uint8Array(k.rawFile);
+      let binary = '';
+      const chunkSize = 8192;
+      for (let i = 0; i < bytes.length; i += chunkSize) {
+        binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
+      }
+      data[code] = {
+        settings: k.settings,
+        audio: btoa(binary)
+      };
+    }
+  }
+  const blob = new Blob([JSON.stringify(data)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'wierboard-keymap.json';
+  a.click();
+  URL.revokeObjectURL(url);
+});
+
+document.getElementById('btnLoadKeymap').addEventListener('click', () => {
+  document.getElementById('keymapInput').click();
+});
+
+document.getElementById('keymapInput').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  try {
+    const text = await file.text();
+    const data = JSON.parse(text);
+    killAll();
+    for (const [code, saved] of Object.entries(data)) {
+      if (saved.audio) {
+        const binary = atob(saved.audio);
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+        const audioBuffer = await audioCtx.decodeAudioData(bytes.buffer.slice(0));
+        const k = getKey(code);
+        k.audioBuffer = audioBuffer;
+        k.rawFile = bytes.buffer;
+        k.settings = { ...defaultSettings(), ...saved.settings };
+
+        const el = document.querySelector(`.key[data-code="${code}"]`);
+        if (el) {
+          el.classList.add('loaded');
+          el.querySelector('.sound-name').textContent = k.settings.soundName.replace(/\.[^.]+$/, '').substring(0, 12);
+        }
+        
+        // Auto-save imported sounds to IndexedDB
+        await saveKeyToDB(code);
+      }
+    }
+    updateConfigPanel();
+  } catch (err) {
+    alert('Error loading keymap: ' + err.message);
+  }
+  e.target.value = '';
+});
+
+// ─── GLOBAL DRAG & DROP ───
+let dragCounter = 0;
+document.addEventListener('dragenter', (e) => {
+  e.preventDefault();
+  dragCounter++;
+  document.getElementById('dropOverlay').style.display = 'flex';
+});
+document.addEventListener('dragleave', (e) => {
+  e.preventDefault();
+  dragCounter--;
+  if (dragCounter <= 0) { document.getElementById('dropOverlay').style.display = 'none'; dragCounter = 0; }
+});
+document.addEventListener('dragover', (e) => e.preventDefault());
+document.addEventListener('drop', (e) => {
+  document.getElementById('dropOverlay').style.display = 'none';
+  e.preventDefault();
+  dragCounter = 0;
+  const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('audio'));
+  if (files.length === 0) return;
+  const x = e.clientX, y = e.clientY;
+  const el = document.elementFromPoint(x, y);
+  const keyEl = el && el.closest && el.closest('.key');
+  if (keyEl && keyEl.dataset.code) {
+    (async () => {
+      for (const file of files) {
+        await loadSoundToKey(keyEl.dataset.code, file);
+        keyEl.classList.add('drop-animate');
+        setTimeout(() => keyEl.classList.remove('drop-animate'), 350);
+      }
+    })();
+  } else {
+    const assignOrder = ['KeyQ','KeyW','KeyE','KeyR','KeyT','KeyY','KeyU','KeyI','KeyO','KeyP',
+      'KeyA','KeyS','KeyD','KeyF','KeyG','KeyH','KeyJ','KeyK','KeyL',
+      'KeyZ','KeyX','KeyC','KeyV','KeyB','KeyN','KeyM',
+      'Digit1','Digit2','Digit3','Digit4','Digit5','Digit6','Digit7','Digit8','Digit9','Digit0',
+      'F1','F2','F3','F4','F5','F6','F7','F8','F9','F10','F11','F12'];
+    let idx = 0;
+    (async () => {
+      for (const file of files) {
+        while (idx < assignOrder.length && getKey(assignOrder[idx]).audioBuffer) idx++;
+        if (idx >= assignOrder.length) break;
+        await loadSoundToKey(assignOrder[idx], file);
+        idx++;
+      }
+    })();
+  }
+});
+
+// ─── CLICK TO DESELECT ───
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('.key') && !e.target.closest('#configPanel') && !e.target.closest('#toolbar')) {
+    document.querySelectorAll('.key.selected').forEach(el => el.classList.remove('selected'));
+    selectedKey = null;
+    updateConfigPanel();
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════
+// INIT — Open DB then auto-load everything
+// ═══════════════════════════════════════════════════════════════
+(async () => {
+  try {
+    db = await openDB();
+    await loadAllFromDB();
+  } catch (err) {
+    console.error('DB init error:', err);
+    setSyncStatus('error', '✕ storage unavailable');
+  }
+})();
+</script>
+</body>
+</html>
